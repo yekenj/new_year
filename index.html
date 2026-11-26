@@ -22,6 +22,11 @@
   --heat0: #e9efec;
   --heat-hi: 31 107 79;   /* rgb for heat alpha */
   --gold: #b8860b;
+  /* result levels: everyone / 1–2 can't / 3–5 can't / 6+ can't */
+  --l0: #1f6b4f; --l0-fg: #ffffff;
+  --l1: #a8dcc0; --l1-fg: #123a2b;
+  --l2: #f3d27a; --l2-fg: #4a3606;
+  --l3: #f1a593; --l3-fg: #5a1a10;
   --font-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
   --font-body: "Manrope", "Segoe UI", system-ui, sans-serif;
 }
@@ -29,11 +34,15 @@
   --bg: #0f1714; --surface: #16211d; --fg: #e6efea; --muted: #93a59c; --line: #26352f;
   --accent: #4fb589; --accent-fg: #0b1411; --busy: #ef7a64; --busy-soft: #3a211c;
   --weekend: #1a2722; --heat0: #1c2924; --heat-hi: 79 181 137; --gold: #e0b44a; color-scheme: dark;
+  --l0: #4fb589; --l0-fg: #0b1411; --l1: #2d6b52; --l1-fg: #e6efea;
+  --l2: #8a6a1e; --l2-fg: #fff3d6; --l3: #8e3b2c; --l3-fg: #ffe3dc;
 } }
 :root[data-theme="dark"] {
   --bg: #0f1714; --surface: #16211d; --fg: #e6efea; --muted: #93a59c; --line: #26352f;
   --accent: #4fb589; --accent-fg: #0b1411; --busy: #ef7a64; --busy-soft: #3a211c;
   --weekend: #1a2722; --heat0: #1c2924; --heat-hi: 79 181 137; --gold: #e0b44a; color-scheme: dark;
+  --l0: #4fb589; --l0-fg: #0b1411; --l1: #2d6b52; --l1-fg: #e6efea;
+  --l2: #8a6a1e; --l2-fg: #fff3d6; --l3: #8e3b2c; --l3-fg: #ffe3dc;
 }
 * { box-sizing: border-box; }
 body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
@@ -104,6 +113,10 @@ h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; mar
 .heat .day { cursor: pointer; flex-direction: column; gap: 0; align-content: center; }
 .heat .day .n { font-size: 11px; font-weight: 600; opacity: .85; }
 .heat .day.sel { outline: 2px solid var(--fg); outline-offset: 1px; }
+.heat .day.l0, .sw.l0 { background: var(--l0); color: var(--l0-fg); border-color: transparent; }
+.heat .day.l1, .sw.l1 { background: var(--l1); color: var(--l1-fg); border-color: transparent; }
+.heat .day.l2, .sw.l2 { background: var(--l2); color: var(--l2-fg); border-color: transparent; }
+.heat .day.l3, .sw.l3 { background: var(--l3); color: var(--l3-fg); border-color: transparent; }
 .detail { border: 1px dashed var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 8px; }
 .detail h3 { margin: 0; font-size: 15px; }
 .people { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -168,7 +181,12 @@ body { margin: 0; }
       <ol class="top" id="top"></ol>
       <h2>Карта месяца</h2>
       <div class="grid heat" id="cal-heat"></div>
-      <div class="legend"><span>Цвет: чем темнее, тем больше людей могут. Цифра под датой: сколько могут.</span></div>
+      <div class="legend">
+        <span><i class="sw l0"></i>могут все</span>
+        <span><i class="sw l1"></i>не могут 1–2</span>
+        <span><i class="sw l2"></i>не могут 3–5</span>
+        <span><i class="sw l3"></i>не могут 6 и больше</span>
+      </div>
       <div class="detail" id="detail"><h3>Нажмите на день, чтобы увидеть, кто не может</h3></div>
       <h2>Кто ответил</h2>
       <ul class="who" id="who"></ul>
@@ -273,13 +291,12 @@ body { margin: 0; }
     buildGrid($("cal-heat"), d => {
       const x = days.find(y => y.d === d);
       if (!x) return offCell(d);
-      const share = x.can / n;
+      const k = x.no.length;
+      const lvl = k === 0 ? "l0" : k <= 2 ? "l1" : k <= 5 ? "l2" : "l3";
       const b = document.createElement("button"); b.type = "button";
-      b.className = "day" + (selDay === d ? " sel" : "");
-      b.style.background = `rgb(var(--heat-hi) / ${(0.08 + share * 0.82).toFixed(2)})`;
-      if (share > 0.55) b.style.color = "var(--accent-fg)";
+      b.className = `day ${lvl}` + (selDay === d ? " sel" : "");
       const num = document.createElement("span"); num.textContent = d;
-      const cnt = document.createElement("span"); cnt.className = "n"; cnt.textContent = `${x.can}/${n}`;
+      const cnt = document.createElement("span"); cnt.className = "n"; cnt.textContent = k === 0 ? "все ✓" : `−${k}`;
       b.append(num, cnt);
       b.setAttribute("aria-label", `${label(d)}: могут ${x.can} из ${n}`);
       b.onclick = () => { selDay = d; renderRes(); };
