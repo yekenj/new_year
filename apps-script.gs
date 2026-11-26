@@ -81,6 +81,33 @@ function updateSummary_() {
   sh.autoResizeColumns(1, 5);
 }
 
+// ---- Автопересчёт «Итогов» при ручной правке таблицы ----
+
+// Запустите ОДИН раз вручную (выберите setupTrigger вверху и нажмите «Выполнить»).
+// После этого «Итоги» пересчитываются при любом изменении таблицы, включая удаление строк.
+function setupTrigger() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  ScriptApp.getProjectTriggers()
+    .filter(t => t.getHandlerFunction() === 'onSheetChange')
+    .forEach(t => ScriptApp.deleteTrigger(t));
+  ScriptApp.newTrigger('onSheetChange').forSpreadsheet(ss).onChange().create();
+  updateSummary_();
+}
+
+// Изменения, сделанные самим скриптом, триггер не вызывают, так что зацикливания нет.
+function onSheetChange(e) {
+  updateSummary_();
+}
+
+// Меню «Опрос → Пересчитать итоги» на всякий случай
+function onOpen() {
+  SpreadsheetApp.getUi().createMenu('Опрос').addItem('Пересчитать итоги', 'recalc').addToUi();
+}
+
+function recalc() {
+  updateSummary_();
+}
+
 function hash_(s) {
   const raw = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, s);
   return raw.slice(0, 8).map(b => ((b + 256) % 256).toString(16).padStart(2, '0')).join('');
