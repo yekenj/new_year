@@ -20,10 +20,17 @@ function answers_() {
 function readAll_() {
   const sh = answers_();
   const rows = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, HEAD.length).getValues() : [];
+  const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
   return rows.filter(r => r[0]).map(r => ({
     id: String(r[0]), name: String(r[1]), dept: String(r[2]), comment: String(r[3]),
-    busy: String(r[4]).split(',').map(s => s.trim()).filter(Boolean)
+    busy: busyList_(r[4], tz)
   }));
+}
+
+// Таблица может сама превратить одиночную дату «2026-12-09» в дату-ячейку: приводим обратно к тексту
+function busyList_(v, tz) {
+  if (v instanceof Date) return [Utilities.formatDate(v, tz, 'yyyy-MM-dd')];
+  return String(v).split(',').map(s => s.trim()).filter(s => DAYS.indexOf(s) >= 0);
 }
 
 function json_(obj) {
@@ -51,8 +58,9 @@ function doPost(e) {
     const sh = answers_();
     const ids = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(r => String(r[0])) : [];
     const i = ids.indexOf(id);
-    if (i >= 0) sh.getRange(i + 2, 1, 1, HEAD.length).setValues([row]);
-    else sh.appendRow(row);
+    const r = i >= 0 ? i + 2 : sh.getLastRow() + 1;
+    sh.getRange(r, 1, 1, 5).setNumberFormat('@'); // текст, чтобы таблица не превращала даты в даты-ячейки
+    sh.getRange(r, 1, 1, HEAD.length).setValues([row]);
     updateSummary_();
     return json_({ ok: true });
   } finally {
