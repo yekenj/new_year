@@ -112,6 +112,10 @@ h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; mar
 .cnt small { color: var(--muted); font-weight: 500; }
 .heat .day { cursor: pointer; flex-direction: column; gap: 0; align-content: center; }
 .heat .day .n { font-size: 11px; font-weight: 600; opacity: .85; }
+.check { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 600; color: var(--fg); cursor: pointer; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; width: fit-content; max-width: 100%; }
+.check input { width: 18px; height: 18px; accent-color: var(--busy); margin: 0; flex: none; }
+.check:has(input:checked) { border-color: var(--busy); background: var(--busy-soft); color: var(--busy); }
+#cal-me.disabled { opacity: .35; pointer-events: none; }
 .heat .day.sel { outline: 2px solid var(--fg); outline-offset: 1px; }
 .heat .day.l0, .sw.l0 { background: var(--l0); color: var(--l0-fg); border-color: transparent; }
 .heat .day.l1, .sw.l1 { background: var(--l1); color: var(--l1-fg); border-color: transparent; }
@@ -160,6 +164,7 @@ body { margin: 0; }
       <span><i class="sw" style="background:var(--weekend)"></i>суббота</span>
       <span><i class="sw" style="border-style:dashed;opacity:.5"></i>не рассматриваем</span>
     </div>
+    <label class="check"><input type="checkbox" id="f-none"> Не смогу прийти ни в один из этих дней</label>
     <label class="full">Комментарий (необязательно)<textarea id="f-cmt" maxlength="300" placeholder="Например: в будни только после 19:00"></textarea></label>
     <div class="actions">
       <button class="btn" id="save">Сохранить ответ</button>
@@ -171,7 +176,7 @@ body { margin: 0; }
 
   <section id="view-res" class="panel" hidden>
     <div class="summary">
-      <div class="stat"><b id="s-total">0</b><span>человек ответили</span></div>
+      <div class="stat"><b id="s-total">0</b><span id="s-total-sub">человек ответили</span></div>
       <div class="stat"><b id="s-best">—</b><span>лучший день</span></div>
       <div class="stat"><b id="s-full">0</b><span>дней, когда могут все</span></div>
     </div>
@@ -221,7 +226,7 @@ body { margin: 0; }
   function show(which) {
     for (const [k, [t, v]] of Object.entries(tabs)) { t.setAttribute("aria-selected", k === which); v.hidden = k !== which; }
     try { localStorage.setItem("korp-tab", which); } catch {}
-    if (which === "res") $("res-body").style.display = responses.length ? "grid" : "none";
+    if (which === "res") renderRes();
   }
   $("tab-me").onclick = () => show("me");
   $("tab-res").onclick = () => show("res");
@@ -244,27 +249,35 @@ body { margin: 0; }
       b.onclick = () => { const k = key(d); busy.has(k) ? busy.delete(k) : busy.add(k); renderMe(); setStatus("Есть несохранённые изменения", ""); };
       return b;
     });
-    $("busy-count").textContent = `Отмечено «не могу»: ${busy.size}`;
+    const none = $("f-none").checked;
+    $("cal-me").classList.toggle("disabled", none);
+    $("busy-count").textContent = none ? "Не смогу ни в один день" : `Отмечено «не могу»: ${busy.size}`;
   }
-  $("clear").onclick = () => { busy.clear(); renderMe(); setStatus("Есть несохранённые изменения", ""); };
+  $("clear").onclick = () => { busy.clear(); $("f-none").checked = false; renderMe(); setStatus("Есть несохранённые изменения", ""); };
+  $("f-none").onchange = () => { renderMe(); setStatus("Есть несохранённые изменения", ""); };
   function setStatus(t, cls) { const s = $("status"); s.textContent = t; s.className = "status " + (cls || ""); }
 
   // ---- results
   function analyse() {
-    const n = responses.length;
+    // people who can't come on any day are left out of the day statistics
+    const active = responses.filter(r => !r.none);
+    const n = active.length;
     const days = [];
     for (const d of ALLOWED) {
       const k = key(d);
-      const no = responses.filter(r => (r.busy || []).includes(k));
+      const no = active.filter(r => (r.busy || []).includes(k));
       days.push({ d, k, can: n - no.length, no });
     }
     return { n, days };
   }
   function renderRes() {
     const { n, days } = analyse();
-    $("tab-count").textContent = n ? `· ${n}` : "";
+    const out = responses.length - n;
+    $("tab-count").textContent = responses.length ? `· ${responses.length}` : "";
     $("s-total").textContent = n;
+    $("s-total-sub").textContent = out ? `выбирают дату · ещё ${out} не придут совсем` : "человек ответили";
     $("res-empty").hidden = n > 0;
+    $("res-empty").textContent = out ? "Пока ответили только те, кто не придёт совсем. Рейтинг дней появится после первого обычного ответа." : "Пока никто не ответил. Как только появятся ответы, здесь будет рейтинг дней.";
     if (!$("view-res").hidden) $("res-body").style.display = n ? "grid" : "none";
     if (!n) { $("s-best").textContent = "—"; $("s-full").textContent = "0"; return; }
 
@@ -320,7 +333,7 @@ body { margin: 0; }
     [...responses].sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru")).forEach(r => {
       const li = document.createElement("li");
       const a = document.createElement("span"); a.textContent = (r.name || "Без имени") + (r.dept ? ` · ${r.dept}` : "");
-      const b = document.createElement("span"); const k = (r.busy || []).length; b.textContent = k ? `не может: ${k} дн.` : "может в любой день";
+      const b = document.createElement("span"); const k = (r.busy || []).length; b.textContent = r.none ? "не придёт ни в один день" : k ? `не может: ${k} дн.` : "может в любой день";
       li.append(a, b);
       if (r.comment) { const c = document.createElement("span"); c.className = "cmt"; c.textContent = "«" + r.comment + "»"; li.appendChild(c); }
       who.appendChild(li);
@@ -337,7 +350,8 @@ body { margin: 0; }
       const r = await fetch(SCRIPT_URL, {
         method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
         body: JSON.stringify({ id: myId, name, dept: $("f-dept").value.trim(), comment: $("f-cmt").value.trim(),
-          busy: [...busy].filter(k => ALLOWED.has(+k.slice(-2))).sort() })
+          none: $("f-none").checked,
+          busy: $("f-none").checked ? [] : [...busy].filter(k => ALLOWED.has(+k.slice(-2))).sort() })
       });
       const j = await r.json();
       if (!j.ok) throw new Error(j.error);
@@ -376,7 +390,7 @@ body { margin: 0; }
         loadedMine = true;
         const mine = responses.find(x => x.id === myHash);
         if (mine) {
-          $("f-name").value = mine.name || ""; $("f-dept").value = mine.dept || ""; $("f-cmt").value = mine.comment || "";
+          $("f-name").value = mine.name || ""; $("f-dept").value = mine.dept || ""; $("f-cmt").value = mine.comment || ""; $("f-none").checked = !!mine.none;
           busy = new Set(mine.busy || []); renderMe(); setStatus("Это ваш сохранённый ответ, его можно поменять", "ok");
         }
       }

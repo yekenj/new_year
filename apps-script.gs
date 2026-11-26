@@ -4,7 +4,7 @@
 const DAYS = ['2026-12-08','2026-12-09','2026-12-10','2026-12-11','2026-12-12',
               '2026-12-15','2026-12-16','2026-12-17','2026-12-18','2026-12-19',
               '2026-12-22','2026-12-23','2026-12-24','2026-12-25','2026-12-26'];
-const HEAD = ['id', 'Имя', 'Отдел', 'Комментарий', 'Не может', 'Обновлено'];
+const HEAD = ['id', 'Имя', 'Отдел', 'Комментарий', 'Не может', 'Обновлено', 'Не придёт совсем'];
 
 function sheet_(name) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -14,6 +14,7 @@ function sheet_(name) {
 function answers_() {
   const sh = sheet_('Ответы');
   if (sh.getLastRow() === 0) sh.appendRow(HEAD);
+  else if (sh.getRange(1, HEAD.length).getValue() !== HEAD[HEAD.length - 1]) sh.getRange(1, 1, 1, HEAD.length).setValues([HEAD]);
   return sh;
 }
 
@@ -23,7 +24,8 @@ function readAll_() {
   const tz = SpreadsheetApp.getActiveSpreadsheet().getSpreadsheetTimeZone();
   return rows.filter(r => r[0]).map(r => ({
     id: String(r[0]), name: String(r[1]), dept: String(r[2]), comment: String(r[3]),
-    busy: busyList_(r[4], tz)
+    none: String(r[6]).trim().toLowerCase() === 'да',
+    busy: String(r[6]).trim().toLowerCase() === 'да' ? [] : busyList_(r[4], tz)
   }));
 }
 
@@ -52,9 +54,10 @@ function doPost(e) {
     const id = String(b.id || '').slice(0, 64);
     const name = String(b.name || '').trim().slice(0, 60);
     if (!id || !name) return json_({ ok: false, error: 'Нужны имя и id' });
-    const busy = (Array.isArray(b.busy) ? b.busy : []).filter(d => DAYS.indexOf(d) >= 0).sort();
+    const none = b.none === true;
+    const busy = none ? [] : (Array.isArray(b.busy) ? b.busy : []).filter(d => DAYS.indexOf(d) >= 0).sort();
     const row = [id, name, String(b.dept || '').trim().slice(0, 40), String(b.comment || '').trim().slice(0, 300),
-                 busy.join(', '), new Date()];
+                 busy.join(', '), new Date(), none ? 'да' : ''];
     const sh = answers_();
     const ids = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(r => String(r[0])) : [];
     const i = ids.indexOf(id);
@@ -70,7 +73,9 @@ function doPost(e) {
 
 // Лист «Итоги»: сколько могут в каждый день и кто не может
 function updateSummary_() {
-  const all = readAll_();
+  const everyone = readAll_();
+  const out = everyone.filter(r => r.none);      // не придут ни в какой день — в статистику дней не входят
+  const all = everyone.filter(r => !r.none);
   const n = all.length;
   const wd = ['вс','пн','вт','ср','чт','пт','сб'];
   const rows = DAYS.map(k => {
@@ -86,6 +91,9 @@ function updateSummary_() {
     sh.getRange(2, 1, rows.length, 5).setValues(rows);
     sh.getRange(2, 4, rows.length, 1).setNumberFormat('0%');
   }
+  const last = rows.length + 3;
+  sh.getRange(last, 1, 1, 2).setValues([['Не придут совсем', out.length]]).setFontWeight('bold');
+  if (out.length) sh.getRange(last, 5).setValue(out.map(r => r.name).join(', '));
   sh.autoResizeColumns(1, 5);
 }
 
