@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Дата корпоратива</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700&family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one narrow column; header, two tabs (my answer / results), month grid as the main object */
+:root {
+  --bg: #f3f6f4;
+  --surface: #ffffff;
+  --fg: #14211c;
+  --muted: #5b6b64;
+  --line: #d9e2dd;
+  --accent: #1f6b4f;      /* pine */
+  --accent-fg: #ffffff;
+  --busy: #c2412d;        /* can't */
+  --busy-soft: #f8e3df;
+  --weekend: #eef2ef;
+  --heat0: #e9efec;
+  --heat-hi: 31 107 79;   /* rgb for heat alpha */
+  --gold: #b8860b;
+  --font-display: "Unbounded", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Manrope", "Segoe UI", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f1714; --surface: #16211d; --fg: #e6efea; --muted: #93a59c; --line: #26352f;
+  --accent: #4fb589; --accent-fg: #0b1411; --busy: #ef7a64; --busy-soft: #3a211c;
+  --weekend: #1a2722; --heat0: #1c2924; --heat-hi: 79 181 137; --gold: #e0b44a; color-scheme: dark;
+} }
+:root[data-theme="dark"] {
+  --bg: #0f1714; --surface: #16211d; --fg: #e6efea; --muted: #93a59c; --line: #26352f;
+  --accent: #4fb589; --accent-fg: #0b1411; --busy: #ef7a64; --busy-soft: #3a211c;
+  --weekend: #1a2722; --heat0: #1c2924; --heat-hi: 79 181 137; --gold: #e0b44a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5; }
+.wrap { max-width: 760px; margin: 0 auto; padding-block: 28px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 20px; }
+header h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(1.5rem, 5vw, 2.1rem); line-height: 1.15; margin: 0; text-wrap: balance; }
+header p { margin: 8px 0 0; color: var(--muted); max-width: 60ch; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); font-weight: 700; margin-bottom: 8px; }
+
+.tabs { display: flex; gap: 4px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 4px; width: fit-content; max-width: 100%; }
+.tabs button { font: 600 14px var(--font-body); border: 0; background: transparent; color: var(--muted); padding: 8px 16px; border-radius: 9px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-fg); }
+.tabs button:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: grid; gap: 18px; min-width: 0; }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 520px) { .fields { grid-template-columns: 1fr; } }
+label { display: grid; gap: 4px; font-size: 13px; font-weight: 600; color: var(--muted); }
+input, textarea { font: 500 15px var(--font-body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%; }
+textarea { resize: vertical; min-height: 60px; }
+.full { grid-column: 1 / -1; }
+
+.month-title { font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.month-title small { font-family: var(--font-body); font-size: 13px; color: var(--muted); font-weight: 500; }
+.grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; }
+.dow { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); text-align: center; font-weight: 700; padding-bottom: 2px; }
+.day { aspect-ratio: 1 / 1; max-width: 100%; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); color: var(--fg);
+  font: 600 15px var(--font-body); font-variant-numeric: tabular-nums; cursor: pointer; position: relative; display: grid; place-items: center; padding: 0; transition: background .12s, border-color .12s; }
+.day.we { background: var(--weekend); }
+.day:hover { border-color: var(--accent); }
+.day.busy { background: var(--busy-soft); border-color: var(--busy); color: var(--busy); }
+.day.busy::after { content: ""; position: absolute; inset: 22%; background:
+  linear-gradient(45deg, transparent 46%, var(--busy) 46%, var(--busy) 54%, transparent 54%),
+  linear-gradient(-45deg, transparent 46%, var(--busy) 46%, var(--busy) 54%, transparent 54%); opacity: .35; pointer-events: none; }
+.day.blank { visibility: hidden; }
+.day.off, .heat .day.off { background: transparent !important; border-style: dashed; color: var(--muted) !important; opacity: .45; cursor: default; }
+.day.off:hover { border-color: var(--line); }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--line); display: inline-block; }
+
+.actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.btn { font: 700 15px var(--font-body); border: 0; border-radius: 10px; padding: 12px 20px; background: var(--accent); color: var(--accent-fg); cursor: pointer; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.status { font-size: 14px; color: var(--muted); }
+.status.ok { color: var(--accent); font-weight: 600; }
+.status.err { color: var(--busy); font-weight: 600; }
+.note { font-size: 14px; color: var(--muted); background: var(--bg); border-radius: 10px; padding: 12px 14px; }
+
+/* results */
+.summary { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+@media (max-width: 520px) { .summary { grid-template-columns: 1fr; } }
+.stat { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; gap: 2px; min-width: 0; }
+.stat b { font-family: var(--font-display); font-size: 1.4rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+.stat span { font-size: 13px; color: var(--muted); }
+h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; margin: 0; }
+.top { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.top li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.top li:hover, .top li.sel { border-color: var(--accent); }
+.rank { font-family: var(--font-display); font-size: 14px; color: var(--muted); text-align: center; }
+.top li:first-child .rank { color: var(--gold); }
+.bar { height: 6px; background: var(--heat0); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.bar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.cnt { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+.cnt small { color: var(--muted); font-weight: 500; }
+.heat .day { cursor: pointer; flex-direction: column; gap: 0; align-content: center; }
+.heat .day .n { font-size: 11px; font-weight: 600; opacity: .85; }
+.heat .day.sel { outline: 2px solid var(--fg); outline-offset: 1px; }
+.detail { border: 1px dashed var(--line); border-radius: 12px; padding: 14px; display: grid; gap: 8px; }
+.detail h3 { margin: 0; font-size: 15px; }
+.people { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font-size: 13px; padding: 4px 10px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); }
+.chip.no { background: var(--busy-soft); border-color: var(--busy); color: var(--busy); }
+.who { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.who li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; border-bottom: 1px solid var(--line); padding-bottom: 6px; flex-wrap: wrap; }
+.who li span:last-child { color: var(--muted); }
+.who .cmt { flex-basis: 100%; color: var(--muted); font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+body { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Новогодний корпоратив · декабрь 2026</div>
+    <h1>Когда соберёмся?</h1>
+    <p>Выбираем из 15 дней: вторник–суббота, с 8 по 26 декабря. Отметьте дни, когда вы <b>не можете</b>, остальные считаем свободными. На вкладке «Итоги» видно, какой день подходит большинству.</p>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button id="tab-me" role="tab" aria-selected="true">Мой ответ</button>
+    <button id="tab-res" role="tab" aria-selected="false">Итоги <span id="tab-count"></span></button>
+  </div>
+
+  <section id="view-me" class="panel">
+    <div class="fields">
+      <label>Имя и фамилия<input id="f-name" maxlength="60" placeholder="Например, Айгерим С." autocomplete="name"></label>
+      <label>Отдел (необязательно)<input id="f-dept" maxlength="40" placeholder="Продажи"></label>
+    </div>
+    <div>
+      <div class="month-title">Декабрь 2026 <small id="busy-count">Отмечено «не могу»: 0</small></div>
+    </div>
+    <div class="grid" id="cal-me"></div>
+    <div class="legend">
+      <span><i class="sw" style="background:var(--surface)"></i>могу</span>
+      <span><i class="sw" style="background:var(--busy-soft);border-color:var(--busy)"></i>не могу (нажмите на день)</span>
+      <span><i class="sw" style="background:var(--weekend)"></i>суббота</span>
+      <span><i class="sw" style="border-style:dashed;opacity:.5"></i>не рассматриваем</span>
+    </div>
+    <label class="full">Комментарий (необязательно)<textarea id="f-cmt" maxlength="300" placeholder="Например: в будни только после 19:00"></textarea></label>
+    <div class="actions">
+      <button class="btn" id="save">Сохранить ответ</button>
+      <button class="btn ghost" id="clear" type="button">Сбросить дни</button>
+      <span class="status" id="status" role="status"></span>
+    </div>
+    <div class="note" id="offline-note" hidden></div>
+  </section>
+
+  <section id="view-res" class="panel" hidden>
+    <div class="summary">
+      <div class="stat"><b id="s-total">0</b><span>человек ответили</span></div>
+      <div class="stat"><b id="s-best">—</b><span>лучший день</span></div>
+      <div class="stat"><b id="s-full">0</b><span>дней, когда могут все</span></div>
+    </div>
+    <div class="note" id="res-empty">Пока никто не ответил. Как только появятся ответы, здесь будет рейтинг дней.</div>
+    <div id="res-body" style="display:none;gap:18px">
+      <h2>Лучшие дни</h2>
+      <ol class="top" id="top"></ol>
+      <h2>Карта месяца</h2>
+      <div class="grid heat" id="cal-heat"></div>
+      <div class="legend"><span>Цвет: чем темнее, тем больше людей могут. Цифра под датой: сколько могут.</span></div>
+      <div class="detail" id="detail"><h3>Нажмите на день, чтобы увидеть, кто не может</h3></div>
+      <h2>Кто ответил</h2>
+      <ul class="who" id="who"></ul>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  // ВСТАВЬТЕ СЮДА ссылку веб-приложения из Apps Script (заканчивается на /exec)
+  const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxNgWmY_4YxblSJJjtSawFb_Yl0EfiVKc5XHYIsugPR-7vjdPgK2-W7v4X3H0Nr8A_3Bg/exec";
+  const CONFIGURED = SCRIPT_URL.startsWith("https://script.google.com/");
+  const YEAR = 2026, MONTH = 11; // December (0-based)
+  const DAYS_IN = new Date(YEAR, MONTH + 1, 0).getDate();
+  const DOW = ["Пн","Вт","Ср","Чт","Пт","Сб","Вс"];
+  const DOW_FULL = ["воскресенье","понедельник","вторник","среда","четверг","пятница","суббота"];
+  const ALLOWED = new Set([8,9,10,11,12, 15,16,17,18,19, 22,23,24,25,26]);
+  const offCell = d => { const b = document.createElement("div"); b.className = "day off"; b.textContent = d; b.setAttribute("aria-hidden", "true"); return b; };
+  const key = d => `${YEAR}-12-${String(d).padStart(2,"0")}`;
+  const firstOffset = (new Date(YEAR, MONTH, 1).getDay() + 6) % 7;
+  const isWe = d => { const w = new Date(YEAR, MONTH, d).getDay(); return w === 0 || w === 6; };
+  const label = d => `${d} декабря, ${DOW_FULL[new Date(YEAR, MONTH, d).getDay()]}`;
+  const $ = id => document.getElementById(id);
+
+  let busy = new Set();
+  let responses = [];   // [{id, name, dept, comment, busy:[]}]
+  let selDay = null;
+  let db = null, myId = null, canWrite = true;
+
+  // ---- tabs
+  const tabs = { me: [$("tab-me"), $("view-me")], res: [$("tab-res"), $("view-res")] };
+  function show(which) {
+    for (const [k, [t, v]] of Object.entries(tabs)) { t.setAttribute("aria-selected", k === which); v.hidden = k !== which; }
+    try { localStorage.setItem("korp-tab", which); } catch {}
+    if (which === "res") $("res-body").style.display = responses.length ? "grid" : "none";
+  }
+  $("tab-me").onclick = () => show("me");
+  $("tab-res").onclick = () => show("res");
+
+  // ---- my calendar
+  function buildGrid(el, cell) {
+    el.textContent = "";
+    for (const d of DOW) { const h = document.createElement("div"); h.className = "dow"; h.textContent = d; el.appendChild(h); }
+    for (let i = 0; i < firstOffset; i++) { const b = document.createElement("div"); b.className = "day blank"; el.appendChild(b); }
+    for (let d = 1; d <= DAYS_IN; d++) el.appendChild(cell(d));
+  }
+  function renderMe() {
+    buildGrid($("cal-me"), d => {
+      if (!ALLOWED.has(d)) return offCell(d);
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "day" + (isWe(d) ? " we" : "") + (busy.has(key(d)) ? " busy" : "");
+      b.textContent = d;
+      b.setAttribute("aria-pressed", busy.has(key(d)));
+      b.setAttribute("aria-label", label(d) + (busy.has(key(d)) ? ": не могу" : ": могу"));
+      b.onclick = () => { const k = key(d); busy.has(k) ? busy.delete(k) : busy.add(k); renderMe(); setStatus("Есть несохранённые изменения", ""); };
+      return b;
+    });
+    $("busy-count").textContent = `Отмечено «не могу»: ${busy.size}`;
+  }
+  $("clear").onclick = () => { busy.clear(); renderMe(); setStatus("Есть несохранённые изменения", ""); };
+  function setStatus(t, cls) { const s = $("status"); s.textContent = t; s.className = "status " + (cls || ""); }
+
+  // ---- results
+  function analyse() {
+    const n = responses.length;
+    const days = [];
+    for (const d of ALLOWED) {
+      const k = key(d);
+      const no = responses.filter(r => (r.busy || []).includes(k));
+      days.push({ d, k, can: n - no.length, no });
+    }
+    return { n, days };
+  }
+  function renderRes() {
+    const { n, days } = analyse();
+    $("tab-count").textContent = n ? `· ${n}` : "";
+    $("s-total").textContent = n;
+    $("res-empty").hidden = n > 0;
+    if (!$("view-res").hidden) $("res-body").style.display = n ? "grid" : "none";
+    if (!n) { $("s-best").textContent = "—"; $("s-full").textContent = "0"; return; }
+
+    const ranked = [...days].sort((a, b) => b.can - a.can || a.d - b.d);
+    const best = ranked[0];
+    $("s-best").textContent = `${best.d} дек`;
+    $("s-full").textContent = days.filter(x => x.can === n).length;
+
+    const top = $("top"); top.textContent = "";
+    ranked.slice(0, 7).forEach((x, i) => {
+      const li = document.createElement("li");
+      if (selDay === x.d) li.className = "sel";
+      const r = document.createElement("span"); r.className = "rank"; r.textContent = i + 1;
+      const mid = document.createElement("div"); mid.style.minWidth = "0";
+      const t = document.createElement("div"); t.textContent = label(x.d); t.style.fontWeight = "600";
+      const bar = document.createElement("div"); bar.className = "bar"; const fill = document.createElement("i"); fill.style.width = (x.can / n * 100) + "%"; bar.appendChild(fill);
+      mid.append(t, bar);
+      const c = document.createElement("span"); c.className = "cnt"; c.textContent = x.can; const sm = document.createElement("small"); sm.textContent = ` / ${n} могут`; c.appendChild(sm);
+      li.append(r, mid, c);
+      li.onclick = () => { selDay = x.d; renderRes(); };
+      top.appendChild(li);
+    });
+
+    buildGrid($("cal-heat"), d => {
+      const x = days.find(y => y.d === d);
+      if (!x) return offCell(d);
+      const share = x.can / n;
+      const b = document.createElement("button"); b.type = "button";
+      b.className = "day" + (selDay === d ? " sel" : "");
+      b.style.background = `rgb(var(--heat-hi) / ${(0.08 + share * 0.82).toFixed(2)})`;
+      if (share > 0.55) b.style.color = "var(--accent-fg)";
+      const num = document.createElement("span"); num.textContent = d;
+      const cnt = document.createElement("span"); cnt.className = "n"; cnt.textContent = `${x.can}/${n}`;
+      b.append(num, cnt);
+      b.setAttribute("aria-label", `${label(d)}: могут ${x.can} из ${n}`);
+      b.onclick = () => { selDay = d; renderRes(); };
+      return b;
+    });
+
+    const det = $("detail"); det.textContent = "";
+    if (selDay) {
+      const x = days.find(y => y.d === selDay);
+      const h = document.createElement("h3"); h.textContent = `${label(selDay)}: могут ${x.can} из ${n}`;
+      det.appendChild(h);
+      const p = document.createElement("div"); p.className = "people";
+      if (!x.no.length) { const s = document.createElement("span"); s.className = "status ok"; s.textContent = "В этот день могут все 🎉"; p.appendChild(s); }
+      for (const r of x.no) { const c = document.createElement("span"); c.className = "chip no"; c.textContent = (r.name || "Без имени") + (r.dept ? ` · ${r.dept}` : ""); p.appendChild(c); }
+      det.appendChild(p);
+    } else {
+      const h = document.createElement("h3"); h.textContent = "Нажмите на день, чтобы увидеть, кто не может"; det.appendChild(h);
+    }
+
+    const who = $("who"); who.textContent = "";
+    [...responses].sort((a, b) => (a.name || "").localeCompare(b.name || "", "ru")).forEach(r => {
+      const li = document.createElement("li");
+      const a = document.createElement("span"); a.textContent = (r.name || "Без имени") + (r.dept ? ` · ${r.dept}` : "");
+      const b = document.createElement("span"); const k = (r.busy || []).length; b.textContent = k ? `не может: ${k} дн.` : "может в любой день";
+      li.append(a, b);
+      if (r.comment) { const c = document.createElement("span"); c.className = "cmt"; c.textContent = "«" + r.comment + "»"; li.appendChild(c); }
+      who.appendChild(li);
+    });
+  }
+
+  // ---- save
+  $("save").onclick = async () => {
+    const name = $("f-name").value.trim();
+    if (!name) { setStatus("Введите имя, чтобы коллеги поняли, чей это ответ", "err"); $("f-name").focus(); return; }
+    if (!CONFIGURED) { setStatus("Опрос ещё не подключён к таблице", "err"); return; }
+    $("save").disabled = true; setStatus("Сохраняю…");
+    try {
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ id: myId, name, dept: $("f-dept").value.trim(), comment: $("f-cmt").value.trim(),
+          busy: [...busy].filter(k => ALLOWED.has(+k.slice(-2))).sort() })
+      });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error);
+      setStatus("Сохранено. Ответ можно поменять в любой момент с этого же устройства", "ok");
+      load();
+    } catch (e) {
+      setStatus("Не сохранилось, проверьте интернет и попробуйте ещё раз", "err");
+    } finally { $("save").disabled = false; }
+  };
+
+  // ---- boot
+  renderMe(); renderRes();
+  try { if (localStorage.getItem("korp-tab") === "res") show("res"); } catch {}
+
+  // personal id lives in this browser, so the same person can edit their answer later
+  try { myId = localStorage.getItem("korp-id"); } catch {}
+  if (!myId) { myId = (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()); try { localStorage.setItem("korp-id", myId); } catch {} }
+  let myHash = null, loadedMine = false;
+  const hashReady = (async () => {
+    try {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(myId));
+      myHash = [...new Uint8Array(buf).slice(0, 8)].map(b => b.toString(16).padStart(2, "0")).join("");
+    } catch {}
+  })();
+
+  const note = $("offline-note");
+  async function load() {
+    if (!CONFIGURED) return;
+    await hashReady;
+    try {
+      const r = await fetch(SCRIPT_URL);
+      const j = await r.json();
+      responses = j.responses || [];
+      note.hidden = true;
+      if (!loadedMine && myHash) {
+        loadedMine = true;
+        const mine = responses.find(x => x.id === myHash);
+        if (mine) {
+          $("f-name").value = mine.name || ""; $("f-dept").value = mine.dept || ""; $("f-cmt").value = mine.comment || "";
+          busy = new Set(mine.busy || []); renderMe(); setStatus("Это ваш сохранённый ответ, его можно поменять", "ok");
+        }
+      }
+      renderRes();
+    } catch {
+      note.hidden = false; note.textContent = "Не удалось загрузить ответы. Проверьте интернет и обновите страницу.";
+    }
+  }
+  if (!CONFIGURED) {
+    note.hidden = false; note.textContent = "Опрос ещё не подключён к Google Таблице: организатору нужно вставить ссылку на скрипт в index.html.";
+  } else {
+    load();
+    setInterval(() => { if (!document.hidden) load(); }, 30000);
+    $("tab-res").addEventListener("click", load);
+  }
+})();
+</script>
+
+</body>
+</html>
