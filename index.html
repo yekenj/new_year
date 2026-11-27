@@ -132,6 +132,24 @@ h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.05rem; mar
 .who .cmt { flex-basis: 100%; color: var(--muted); font-size: 13px; }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 body { margin: 0; }
+.page { display: grid; gap: 20px; }
+.sub { margin: 0; font-size: 14px; color: var(--muted); }
+h2 + .sub { margin-top: 4px; }
+.gate { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.gate p { margin: 2px 0 0; color: var(--muted); font-size: 14px; }
+.opts { display: grid; gap: 8px; }
+.opt { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: 15px; font-weight: 500; color: var(--fg); line-height: 1.4; }
+.opt input { width: 18px; height: 18px; margin: 2px 0 0; accent-color: var(--accent); flex: none; }
+.opt:has(input:checked) { border-color: var(--accent); background: rgb(var(--heat-hi) / .1); }
+.opt small { display: block; color: var(--muted); font-weight: 500; font-size: 12px; }
+.fres-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.fres { display: grid; gap: 12px; }
+.fres .row { display: grid; gap: 6px; }
+.fres .line { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; }
+.fres .line span:first-child { min-width: 0; }
+.fres .line b { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fres .mine { color: var(--accent); font-size: 12px; font-weight: 700; margin-left: 6px; white-space: nowrap; }
+.fres .bar { margin-top: 0; height: 8px; }
 [hidden] { display: none !important; }
 </style>
 </head>
@@ -141,14 +159,15 @@ body { margin: 0; }
   <header>
     <div class="eyebrow">Новогодний корпоратив · декабрь 2026</div>
     <h1>Когда соберёмся?</h1>
-    <p>Выбираем из 15 дней: вторник–суббота, с 8 по 26 декабря. Отметьте дни, когда вы <b>не можете</b>, остальные считаем свободными. На вкладке «Итоги» видно, какой день подходит большинству.</p>
+    <p>Выбираем из 15 дней: вторник–суббота, с 8 по 26 декабря. Отметьте дни, когда вы <b>не можете</b>, остальные считаем свободными. На вкладке «Формат» можно проголосовать, как отмечаем.</p>
   </header>
 
   <div class="tabs" role="tablist">
-    <button id="tab-me" role="tab" aria-selected="true">Мой ответ</button>
-    <button id="tab-res" role="tab" aria-selected="false">Итоги <span id="tab-count"></span></button>
+    <button id="tab-date" role="tab" aria-selected="true">Дата <span id="tab-count"></span></button>
+    <button id="tab-fmt" role="tab" aria-selected="false">Формат <span id="tab-fcount"></span></button>
   </div>
 
+  <div id="page-date" class="page">
   <section id="view-me" class="panel">
     <div class="fields">
       <label>Имя и фамилия<input id="f-name" maxlength="60" placeholder="Например, Айгерим С." autocomplete="name"></label>
@@ -174,7 +193,13 @@ body { margin: 0; }
     <div class="note" id="offline-note" hidden></div>
   </section>
 
+  <section id="gate-date" class="panel gate">
+    <div><b>Итоги по датам</b><p>Откроются, как только вы сохраните свой ответ.</p></div>
+    <button class="btn ghost" type="button" id="peek-date">Показать без ответа</button>
+  </section>
+
   <section id="view-res" class="panel" hidden>
+    <h2>Итоги по датам</h2>
     <div class="summary">
       <div class="stat"><b id="s-total">0</b><span id="s-total-sub">человек ответили</span></div>
       <div class="stat"><b id="s-best">—</b><span>лучший день</span></div>
@@ -197,6 +222,36 @@ body { margin: 0; }
       <ul class="who" id="who"></ul>
     </div>
   </section>
+  </div>
+
+  <div id="page-fmt" class="page" hidden>
+  <section class="panel">
+    <div>
+      <h2>Какой формат вам ближе?</h2>
+      <p class="sub">Можно выбрать несколько. Голосовать необязательно.</p>
+    </div>
+    <label>Имя и фамилия<input id="fm-name" maxlength="60" placeholder="Например, Айгерим С." autocomplete="name"></label>
+    <p class="sub" id="fm-name-hint" hidden>Подставили из вашего ответа по датам</p>
+    <div class="opts" id="fm-opts"></div>
+    <label>Свой вариант (необязательно)<input id="fm-own" maxlength="120" placeholder="Например: баня с коллегами"></label>
+    <p class="sub">Ваш вариант появится в списке, и за него смогут проголосовать другие.</p>
+    <div class="actions">
+      <button class="btn" id="fm-save">Проголосовать</button>
+      <span class="status" id="fm-status" role="status"></span>
+    </div>
+  </section>
+
+  <section id="gate-fmt" class="panel gate">
+    <div><b>Результаты голосования</b><p>Откроются, как только вы проголосуете.</p></div>
+    <button class="btn ghost" type="button" id="peek-fmt">Показать без голоса</button>
+  </section>
+
+  <section id="view-fres" class="panel" hidden>
+    <div class="fres-head"><h2>Результаты</h2><span class="sub" id="fres-total"></span></div>
+    <div class="fres" id="fres"></div>
+    <p class="note" id="fres-empty">Пока никто не проголосовал.</p>
+  </section>
+  </div>
 </div>
 
 <script>
@@ -221,15 +276,26 @@ body { margin: 0; }
   let selDay = null;
   let db = null, myId = null, canWrite = true;
 
-  // ---- tabs
-  const tabs = { me: [$("tab-me"), $("view-me")], res: [$("tab-res"), $("view-res")] };
+  // ---- tabs (Дата / Формат)
+  const tabs = { date: [$("tab-date"), $("page-date")], fmt: [$("tab-fmt"), $("page-fmt")] };
   function show(which) {
     for (const [k, [t, v]] of Object.entries(tabs)) { t.setAttribute("aria-selected", k === which); v.hidden = k !== which; }
     try { localStorage.setItem("korp-tab", which); } catch {}
-    if (which === "res") renderRes();
   }
-  $("tab-me").onclick = () => show("me");
-  $("tab-res").onclick = () => show("res");
+  $("tab-date").onclick = () => show("date");
+  $("tab-fmt").onclick = () => show("fmt");
+
+  // ---- results open after answering (or on "show without answering")
+  const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch {} return null; };
+  let hasDate = false, hasFmt = false;
+  let peekDate = ls("korp-peek-date") === "1", peekFmt = ls("korp-peek-fmt") === "1";
+  function updateGates() {
+    const d = hasDate || peekDate, f = hasFmt || peekFmt;
+    $("gate-date").hidden = d; $("view-res").hidden = !d;
+    $("gate-fmt").hidden = f; $("view-fres").hidden = !f;
+  }
+  $("peek-date").onclick = () => { peekDate = true; ls("korp-peek-date", "1"); updateGates(); renderRes(); };
+  $("peek-fmt").onclick = () => { peekFmt = true; ls("korp-peek-fmt", "1"); updateGates(); renderFmt(); };
 
   // ---- my calendar
   function buildGrid(el, cell) {
@@ -278,7 +344,7 @@ body { margin: 0; }
     $("s-total-sub").textContent = out ? `выбирают дату · ещё ${out} не придут совсем` : "человек ответили";
     $("res-empty").hidden = n > 0;
     $("res-empty").textContent = out ? "Пока ответили только те, кто не придёт совсем. Рейтинг дней появится после первого обычного ответа." : "Пока никто не ответил. Как только появятся ответы, здесь будет рейтинг дней.";
-    if (!$("view-res").hidden) $("res-body").style.display = n ? "grid" : "none";
+    $("res-body").style.display = n ? "grid" : "none";
     if (!n) { $("s-best").textContent = "—"; $("s-full").textContent = "0"; return; }
 
     const ranked = [...days].sort((a, b) => b.can - a.can || a.d - b.d);
@@ -355,16 +421,98 @@ body { margin: 0; }
       });
       const j = await r.json();
       if (!j.ok) throw new Error(j.error);
-      setStatus("Сохранено. Ответ можно поменять в любой момент с этого же устройства", "ok");
+      setStatus("Сохранено. Итоги ниже. Ответ можно поменять с этого же устройства", "ok");
+      ls("korp-name", name);
+      if (!$("fm-name").value.trim()) { $("fm-name").value = name; $("fm-name-hint").hidden = false; }
+      hasDate = true; updateGates();
       load();
     } catch (e) {
       setStatus("Не сохранилось, проверьте интернет и попробуйте ещё раз", "err");
     } finally { $("save").disabled = false; }
   };
 
+  // ---- format vote
+  const FIXED = [
+    "Общий корпоратив с другими коллективами (шоу-программа, социализация)",
+    "Свой корпоратив в VIP-зале заведения с шоу-программой от Show Today и т.п."
+  ];
+  let fmt = { options: FIXED.slice(), votes: [] };
+  let fmChecked = new Set();       // labels this viewer has ticked
+  let fmLoadedMine = false;
+  const nk = s => String(s || "").toLowerCase().replace(/ё/g, "е").replace(/\s+/g, " ").trim();
+  const setFmStatus = (t, cls) => { const s = $("fm-status"); s.textContent = t; s.className = "status " + (cls || ""); };
+
+  function renderFmtOptions() {
+    const box = $("fm-opts"); box.textContent = "";
+    fmt.options.forEach((o, i) => {
+      const l = document.createElement("label"); l.className = "opt";
+      const inp = document.createElement("input"); inp.type = "checkbox"; inp.id = "fm-o" + i;
+      inp.checked = [...fmChecked].some(c => nk(c) === nk(o));
+      inp.onchange = () => {
+        for (const c of [...fmChecked]) if (nk(c) === nk(o)) fmChecked.delete(c);
+        if (inp.checked) fmChecked.add(o);
+        setFmStatus("Есть несохранённые изменения", "");
+      };
+      const txt = document.createElement("span"); txt.textContent = o;
+      if (!FIXED.includes(o)) { const s = document.createElement("small"); s.textContent = "предложил кто-то из коллег"; txt.appendChild(s); }
+      l.append(inp, txt); box.appendChild(l);
+    });
+  }
+
+  function renderFmt() {
+    const votes = fmt.votes || [];
+    $("tab-fcount").textContent = votes.length ? `· ${votes.length}` : "";
+    $("fres-total").textContent = votes.length ? `проголосовали ${votes.length}` : "";
+    $("fres-empty").hidden = votes.length > 0;
+    const mine = votes.find(v => v.id === myHash);
+    const rows = fmt.options.map(o => ({
+      o, n: votes.filter(v => (v.choices || []).some(c => nk(c) === nk(o))).length,
+      me: !!mine && (mine.choices || []).some(c => nk(c) === nk(o))
+    })).sort((a, b) => b.n - a.n);
+    const box = $("fres"); box.textContent = "";
+    if (!votes.length) return;
+    for (const r of rows) {
+      const row = document.createElement("div"); row.className = "row";
+      const line = document.createElement("div"); line.className = "line";
+      const a = document.createElement("span"); a.textContent = r.o;
+      if (r.me) { const m = document.createElement("span"); m.className = "mine"; m.textContent = "ваш выбор"; a.appendChild(m); }
+      const b = document.createElement("b"); b.textContent = `${r.n} · ${Math.round(r.n / votes.length * 100)}%`;
+      line.append(a, b);
+      const bar = document.createElement("div"); bar.className = "bar"; const fill = document.createElement("i"); fill.style.width = (r.n / votes.length * 100) + "%"; bar.appendChild(fill);
+      row.append(line, bar); box.appendChild(row);
+    }
+  }
+
+  $("fm-name").oninput = () => { $("fm-name-hint").hidden = true; };
+  $("fm-save").onclick = async () => {
+    const name = $("fm-name").value.trim();
+    const own = $("fm-own").value.trim();
+    if (!name) { setFmStatus("Введите имя: так один человек голосует один раз", "err"); $("fm-name").focus(); return; }
+    if (!fmChecked.size && !own) { setFmStatus("Отметьте хотя бы один вариант или впишите свой", "err"); return; }
+    if (!CONFIGURED) { setFmStatus("Опрос ещё не подключён к таблице", "err"); return; }
+    $("fm-save").disabled = true; setFmStatus("Сохраняю…");
+    try {
+      const r = await fetch(SCRIPT_URL, {
+        method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify({ kind: "format", id: myId, name, choices: [...fmChecked], own })
+      });
+      const j = await r.json();
+      if (!j.ok) throw new Error(j.error);
+      if (own) fmChecked.add(own);
+      $("fm-own").value = "";
+      ls("korp-name", name);
+      hasFmt = true; updateGates();
+      setFmStatus("Голос учтён. Результаты ниже, голос можно изменить", "ok");
+      load();
+    } catch (e) {
+      setFmStatus("Не сохранилось, проверьте интернет и попробуйте ещё раз", "err");
+    } finally { $("fm-save").disabled = false; }
+  };
+
   // ---- boot
-  renderMe(); renderRes();
-  try { if (localStorage.getItem("korp-tab") === "res") show("res"); } catch {}
+  renderMe(); renderRes(); renderFmtOptions(); updateGates();
+  if (ls("korp-tab") === "fmt") show("fmt");
+  { const n = ls("korp-name"); if (n) { $("fm-name").value = n; $("fm-name-hint").hidden = false; } }
 
   // personal id lives in this browser, so the same person can edit their answer later
   try { myId = localStorage.getItem("korp-id"); } catch {}
@@ -392,9 +540,21 @@ body { margin: 0; }
         if (mine) {
           $("f-name").value = mine.name || ""; $("f-dept").value = mine.dept || ""; $("f-cmt").value = mine.comment || ""; $("f-none").checked = !!mine.none;
           busy = new Set(mine.busy || []); renderMe(); setStatus("Это ваш сохранённый ответ, его можно поменять", "ok");
+          if (mine.name) { ls("korp-name", mine.name); if (!$("fm-name").value.trim()) { $("fm-name").value = mine.name; $("fm-name-hint").hidden = false; } }
         }
       }
-      renderRes();
+      if (myHash && responses.some(x => x.id === myHash)) hasDate = true;
+      if (j.format) {
+        fmt = { options: j.format.options && j.format.options.length ? j.format.options : FIXED.slice(), votes: j.format.votes || [] };
+        const fm = fmt.votes.find(v => v.id === myHash);
+        if (fm) {
+          hasFmt = true;
+          if (!fmLoadedMine) { fmLoadedMine = true; fmChecked = new Set(fm.choices || []); setFmStatus("Это ваш голос, его можно изменить", "ok"); }
+        }
+        renderFmtOptions();
+      }
+      updateGates();
+      renderRes(); renderFmt();
     } catch {
       note.hidden = false; note.textContent = "Не удалось загрузить ответы. Проверьте интернет и обновите страницу.";
     }
@@ -404,7 +564,7 @@ body { margin: 0; }
   } else {
     load();
     setInterval(() => { if (!document.hidden) load(); }, 30000);
-    $("tab-res").addEventListener("click", load);
+    $("tab-fmt").addEventListener("click", load);
   }
 })();
 </script>
