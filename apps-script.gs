@@ -39,10 +39,83 @@ function json_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
+// ---- Голосование за формат (лист «Формат») ----
+const FORMAT_FIXED = [
+  'Общий корпоратив с другими коллективами (шоу-программа, социализация)',
+  'Свой корпоратив в VIP-зале заведения с шоу-программой от Show Today и т.п.'
+];
+const FHEAD = ['id', 'Имя', 'Выбор', 'Свой вариант', 'Обновлено'];
+
+function formatSheet_() {
+  const sh = sheet_('Формат');
+  if (sh.getLastRow() === 0) sh.appendRow(FHEAD);
+  return sh;
+}
+
+const nameKey_ = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+const clean_ = s => String(s || '').replace(/[\r\n]+/g, ' ').trim();
+
+function readFormat_() {
+  const sh = formatSheet_();
+  const rows = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, FHEAD.length).getValues() : [];
+  return rows.filter(r => r[0]).map(r => ({
+    id: String(r[0]), name: String(r[1]),
+    choices: String(r[2]).split('\n').map(clean_).filter(Boolean),
+    own: clean_(r[3])
+  }));
+}
+
+// Все варианты: два фиксированных + «свои варианты» людей (без дублей по регистру)
+function formatOptions_(votes) {
+  const out = [], seen = {};
+  const add = s => { const k = nameKey_(s); if (s && !seen[k]) { seen[k] = true; out.push(s); } };
+  FORMAT_FIXED.forEach(add);
+  votes.forEach(v => add(v.own));
+  votes.forEach(v => v.choices.forEach(add));
+  return out;
+}
+
+function saveFormat_(b) {
+  const id = String(b.id || '').slice(0, 64);
+  const name = clean_(b.name).slice(0, 60);
+  if (!id || !name) return json_({ ok: false, error: 'Нужны имя и id' });
+  const own = clean_(b.own).slice(0, 120);
+  const votes = readFormat_();
+  const allowed = formatOptions_(votes);
+  if (own) allowed.push(own);
+  const keys = allowed.map(nameKey_);
+  const choices = [];
+  (Array.isArray(b.choices) ? b.choices : []).forEach(c => {
+    const i = keys.indexOf(nameKey_(c));
+    if (i >= 0 && choices.indexOf(allowed[i]) < 0) choices.push(allowed[i]);
+  });
+  if (own && choices.map(nameKey_).indexOf(nameKey_(own)) < 0) choices.push(own);
+  if (!choices.length) return json_({ ok: false, error: 'Выберите хотя бы один вариант' });
+
+  // один голос на человека: ищем по имени, потом по устройству
+  const sh = formatSheet_();
+  let i = votes.findIndex(v => nameKey_(v.name) === nameKey_(name));
+  if (i < 0) i = votes.findIndex(v => v.id === id);
+  // строки без id не читаются, поэтому номер строки ищем заново по id найденного голоса
+  let r;
+  if (i >= 0) {
+    const ids = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(x => String(x[0]));
+    r = ids.indexOf(votes[i].id) + 2;
+  } else r = sh.getLastRow() + 1;
+  sh.getRange(r, 1, 1, 4).setNumberFormat('@');
+  sh.getRange(r, 1, 1, FHEAD.length).setValues([[id, name, choices.join('\n'), own, new Date()]]);
+  return null;
+}
+
 // GET: все ответы (id не отдаём наружу целиком — только его хэш, чтобы нельзя было переписать чужой ответ)
 function doGet() {
   const list = readAll_().map(r => ({ ...r, id: hash_(r.id) }));
-  return json_({ ok: true, responses: list });
+  const votes = readFormat_();
+  const format = {
+    options: formatOptions_(votes),
+    votes: votes.map(v => ({ id: hash_(v.id), choices: v.choices, own: v.own }))  // без имён
+  };
+  return json_({ ok: true, responses: list, format });
 }
 
 // POST: сохранить или обновить свой ответ
@@ -51,6 +124,12 @@ function doPost(e) {
   lock.waitLock(10000);
   try {
     const b = JSON.parse(e.postData.contents);
+    if (b.kind === 'format') {
+      const err = saveFormat_(b);
+      if (err) return err;
+      updateSummary_();
+      return json_({ ok: true });
+    }
     const id = String(b.id || '').slice(0, 64);
     const name = String(b.name || '').trim().slice(0, 60);
     if (!id || !name) return json_({ ok: false, error: 'Нужны имя и id' });
@@ -94,6 +173,20 @@ function updateSummary_() {
   const last = rows.length + 3;
   sh.getRange(last, 1, 1, 2).setValues([['Не придут совсем', out.length]]).setFontWeight('bold');
   if (out.length) sh.getRange(last, 5).setValue(out.map(r => r.name).join(', '));
+
+  // Формат
+  const votes = readFormat_();
+  const opts = formatOptions_(votes);
+  const frows = opts.map(o => {
+    const who = votes.filter(v => v.choices.map(nameKey_).indexOf(nameKey_(o)) >= 0);
+    return [o, who.length, votes.length, votes.length ? who.length / votes.length : 0, who.map(v => v.name).join(', ')];
+  }).sort((a, b) => b[1] - a[1]);
+  const f0 = last + 2;
+  sh.getRange(f0, 1, 1, 5).setValues([['Формат', 'Голосов', 'Проголосовали', 'Доля', 'Кто']]).setFontWeight('bold');
+  if (frows.length) {
+    sh.getRange(f0 + 1, 1, frows.length, 5).setValues(frows);
+    sh.getRange(f0 + 1, 4, frows.length, 1).setNumberFormat('0%');
+  }
   sh.autoResizeColumns(1, 5);
 }
 
