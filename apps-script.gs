@@ -54,6 +54,43 @@ function formatSheet_() {
 
 const nameKey_ = s => String(s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
 const clean_ = s => String(s || '').replace(/[\r\n]+/g, ' ').trim();
+// Человек = первое слово имени: «Айнура К.», «айнура» и «Айнура Кенжебаева» — один и тот же ответ.
+// (одинаковых имён в коллективе нет)
+const personKey_ = s => nameKey_(s).replace(/[^\p{L}\p{N} ]/gu, ' ').trim().split(/\s+/)[0] || '';
+
+// Номер строки для ответа: сначала ищем этого человека по имени, потом это устройство по id
+function findRow_(sh, id, name) {
+  const n = sh.getLastRow() - 1;
+  if (n < 1) return sh.getLastRow() + 1;
+  const vals = sh.getRange(2, 1, n, 2).getValues();
+  const pk = personKey_(name);
+  for (let i = n - 1; i >= 0; i--) if (vals[i][0] && personKey_(vals[i][1]) === pk) return i + 2;
+  for (let i = n - 1; i >= 0; i--) if (String(vals[i][0]) === id) return i + 2;
+  return sh.getLastRow() + 1;
+}
+
+// Убирает дубли: у каждого человека остаётся самый свежий ответ
+function dedupe_(sh, timeCol) {
+  const n = sh.getLastRow() - 1;
+  if (n < 2) return 0;
+  const vals = sh.getRange(2, 1, n, timeCol).getValues();
+  const best = {}, drop = [];
+  vals.forEach((r, i) => {
+    if (!r[0]) return;
+    const k = personKey_(r[1]);
+    if (!k) return;
+    const t = r[timeCol - 1] instanceof Date ? r[timeCol - 1].getTime() : 0;
+    const prev = best[k];
+    if (!prev) { best[k] = { i, t }; return; }
+    if (t >= prev.t) { drop.push(prev.i); best[k] = { i, t }; } else drop.push(i);
+  });
+  drop.sort((a, b) => b - a).forEach(i => sh.deleteRow(i + 2));
+  return drop.length;
+}
+
+function cleanDuplicates_() {
+  return dedupe_(answers_(), 6) + dedupe_(formatSheet_(), 5);
+}
 
 function readFormat_() {
   const sh = formatSheet_();
@@ -94,14 +131,7 @@ function saveFormat_(b) {
 
   // один голос на человека: ищем по имени, потом по устройству
   const sh = formatSheet_();
-  let i = votes.findIndex(v => nameKey_(v.name) === nameKey_(name));
-  if (i < 0) i = votes.findIndex(v => v.id === id);
-  // строки без id не читаются, поэтому номер строки ищем заново по id найденного голоса
-  let r;
-  if (i >= 0) {
-    const ids = sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(x => String(x[0]));
-    r = ids.indexOf(votes[i].id) + 2;
-  } else r = sh.getLastRow() + 1;
+  const r = findRow_(sh, id, name);
   sh.getRange(r, 1, 1, 4).setNumberFormat('@');
   sh.getRange(r, 1, 1, FHEAD.length).setValues([[id, name, choices.join('\n'), own, new Date()]]);
   return null;
@@ -138,9 +168,7 @@ function doPost(e) {
     const row = [id, name, String(b.dept || '').trim().slice(0, 40), String(b.comment || '').trim().slice(0, 300),
                  busy.join(', '), new Date(), none ? 'да' : ''];
     const sh = answers_();
-    const ids = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, 1).getValues().map(r => String(r[0])) : [];
-    const i = ids.indexOf(id);
-    const r = i >= 0 ? i + 2 : sh.getLastRow() + 1;
+    const r = findRow_(sh, id, name);   // тот же человек с другого устройства — заменяем его ответ
     sh.getRange(r, 1, 1, 5).setNumberFormat('@'); // текст, чтобы таблица не превращала даты в даты-ячейки
     sh.getRange(r, 1, 1, HEAD.length).setValues([row]);
     updateSummary_();
@@ -152,6 +180,7 @@ function doPost(e) {
 
 // Лист «Итоги»: сколько могут в каждый день и кто не может
 function updateSummary_() {
+  cleanDuplicates_();
   const everyone = readAll_();
   const out = everyone.filter(r => r.none);      // не придут ни в какой день — в статистику дней не входят
   const all = everyone.filter(r => !r.none);
